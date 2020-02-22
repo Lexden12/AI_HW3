@@ -113,6 +113,7 @@ class AIPlayer(Player):
           else:
             self.root = maxNode
           return maxNode.move
+        self.root = None
         return Move(END)
 
     def legalMove(self, state, move):
@@ -257,11 +258,11 @@ class AIPlayer(Player):
 
       # value army size
       if me == self.me:
-        myScore += min(len(myOffense), 3) * 15
-        enemyScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 3) * 15)
+        myScore += min(len(myOffense), 1) * 15
+        enemyScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 1) * 15)
       else:
-        enemyScore += min(len(myOffense), 3) * 15
-        myScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 3) * 15)
+        enemyScore += min(len(myOffense), 1) * 15
+        myScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 1) * 15)
 
       # encourage more food gathering
       myScore -= 10 if (myFood < 1) else 0
@@ -275,18 +276,38 @@ class AIPlayer(Player):
       # to kill enemyworker and after
       # going to sit on enemy anthill
       dist = 100
-      for ant in myOffense:
-        if len(enemyWorkers) == 0:
-          dist = stepsToReach(currentState, ant.coords, enemyHill.coords)
+      score = 0
+      offense = myOffense
+      workers = enemyWorkers
+      hill = enemyHill
+      if not self.me == me:
+        offense = enemyOffense
+        workers = myWorkers
+        hill = myHill
+      for ant in offense:
+        if len(workers) == 0:
+          dist = stepsToReach(currentState, ant.coords, hill.coords)
         else:
-          dist = stepsToReach(currentState, ant.coords, enemyWorkers[0].coords)
-        myScore += 10 - min(dist, 10)
-      myScore += 21 - 7*(enemyHill.captureHealth)
+          dist = stepsToReach(currentState, ant.coords, workers[0].coords)
+        score += 10 - min(dist, 10) // 2
+      if self.me == me:
+        myScore += 21 - 7*(hill.captureHealth) + score
+      else:
+        enemyScore += 21 - 7*(hill.captureHealth) + score
       dist = 100
-      for ant in enemyOffense:
-        dist = approxDist(ant.coords, myHill.coords)
-        enemyScore += 10 - min(dist, 10)
-      enemyScore += 21 - 7*(myHill.captureHealth)
+      score = 0
+      offense = enemyOffense
+      hill = myHill
+      if not self.me == me:
+        offense = myOffense
+        hill = enemyHill
+      for ant in offense:
+        dist = approxDist(ant.coords, hill.coords)
+        score += 10 - min(dist, 10) // 2
+      if self.me == me:
+        myScore += 21 - 7*(hill.captureHealth) + score
+      else:
+        enemyScore += 21 - 7*(hill.captureHealth) + score
 
       # Gather food
       if me == self.me:
@@ -300,32 +321,25 @@ class AIPlayer(Player):
       score = 0
       for w in workers:
         if w.carrying: # if carrying go to hill/tunnel
-          score += 3
+          score += 2
           distanceToTunnel = approxDist(w.coords, tunnel.coords)
           distanceToHill = approxDist(w.coords, hill.coords)
           dist = min(distanceToHill, distanceToTunnel)
-          if dist > 2 and dist <= 4:
+          if dist <= 3:
             score += 1
-          if dist <= 2:
-            score += 2
         else: # if not carrying go to food
           dist = 100
           for food in foods:
             temp = approxDist(w.coords, food.coords)
             if temp < dist:
               dist = temp
-          if dist > 2 and dist <= 4:
+          if dist <= 3:
             score += 1
-          if dist <= 2:
-            score += 2
       if self.me == me:
         myScore += score
       else:
         enemyScore += score
-#     for w in myWorkers:
-#       if w.carrying:
-#         myScore += 4
-#     myScore += myFood * 7
+      myScore += myFood * 5
 
       if self.me == me:
         workers = enemyWorkers
@@ -334,12 +348,12 @@ class AIPlayer(Player):
       score = 0
       for w in workers:
         if w.carrying:
-          enemyScore += 4
+          enemyScore += 3
       if self.me == me:
         enemyScore += score
       else:
         myScore += score
-      enemyScore += enemyFood * 7
+      enemyScore += enemyFood * 5
 
       score = min(myScore - enemyScore, 95) if (myScore - enemyScore > 0) else max(myScore - enemyScore, -95)
       win = getWinner(currentState)
