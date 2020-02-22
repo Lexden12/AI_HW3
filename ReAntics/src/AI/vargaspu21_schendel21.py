@@ -31,6 +31,7 @@ class AIPlayer(Player):
     def __init__(self, inputPlayerId):
         super(AIPlayer, self).__init__(inputPlayerId, "MiniMax")
         self.root = None
+        self.prune = True
 
     ##
     #getPlacement
@@ -98,17 +99,18 @@ class AIPlayer(Player):
     def getMove(self, currentState):
         self.me = currentState.whoseTurn
         if self.root is None:
-          self.root = Node(None, currentState, 0)
+          self.root = Node(None, currentState, 0, None)
 
           # For loops goes until set depth
           # in this case a depth of 3 
           self.total = 0
           self.expandNode(self.root)
-          self.minimax(self.root)
           print(self.total)
         maxNode = self.root.children[0]
         maxScore = self.root.children[0].score
         for child in self.root.children:
+          #print(child.move)
+          #print(child.score)
           if child.score > maxScore:
             maxScore = child.score
             maxNode = child
@@ -121,10 +123,9 @@ class AIPlayer(Player):
         return maxNode.move
 
     def legalMove(self, state, move):
-      if move.coordList is not None:
-        for coord in move.coordList:
-          if getAntAt(state, coord) is not None:
-            return False
+      if move.coordList is not None and move.moveType == MOVE_ANT:
+        if getAntAt(state, move.coordList[0]).hasMoved:
+          return False
       return True
         
     ##
@@ -137,39 +138,48 @@ class AIPlayer(Player):
     # returns a list of nodes
     ##
     def expandNode(self, node):
-      if node.depth == 3:
+      win = getWinner(node.state)
+      if win is not None:
+        node.score = 100 if (win == 1) else -100
+        node.score = node.score if (node.turn == self.me) else -node.score
+        if node.parent is not None:
+          node.parent.updateBounds(node, self.me)
+        return
+      if node.depth == 4:
         node.score = self.utility(node.state)
+        if node.parent is not None:
+          node.parent.updateBounds(node, self.me)
         return
       moves = listAllLegalMoves(node.state)
       for move in moves:
-        self.legalMove(node.state, move)
         nextState = getNextStateAdversarial(node.state, move)
         newDepth = node.depth + 1
-        newNode = Node(move, nextState, newDepth)
-        win = getWinner(nextState)
-        if win is not None:
-          node.score = 100 if (win == 1) else -100
-          node.score = node.score if (node.turn == self.me) else -node.score
+        newNode = Node(move, nextState, newDepth, node)
         node.addChild(newNode)
         self.expandNode(newNode)
-        self.total += len(node.children)
-
-    def minimax(self, node):
-      if(len(node.children) > 0):
-        for child in node.children:
-          self.minimax(child)
-      else:
-        return
+        if self.prune and node.parent is not None:
+          if node.turn == self.me:#Must be on previous iteration
+            if node.alpha >= node.parent.beta or (node.score is not None and node.score >= node.parent.beta):
+#             print("Alpha")
+              node.parent.removeChild(node)
+              return
+          else:
+            if node.beta <= node.parent.alpha or (node.score is not None and node.score <= node.parent.alpha):
+#             print("Beta")
+              node.parent.removeChild(node)
+              return
+      
+      self.total += len(node.children)
       if node.turn == self.me:
-        node.score = -200
-        for child in node.children:
-          if child.score > node.score:
-            node.score = child.score
+        node.score = node.alpha
       else:
-        node.score = 200
-        for child in node.children:
-          if child.score < node.score:
-            node.score = child.score
+        node.score = node.beta
+      if node.parent is not None:
+        node.parent.updateBounds(node, self.me)
+      if node.parent is None:
+        print("Root:")
+        print(node.score)
+        print(len(node.children))
 
     ##
     #getAttack
@@ -193,14 +203,6 @@ class AIPlayer(Player):
     def registerWin(self, hasWon):
         #method templaste, not implemented
         pass
-
-    ##
-    # sortAttr
-    #
-    # This a helper function for sorting the frontierNodes
-    ##
-    def sortAttr(self, node):
-      return node.steps
 
     ##
     #heuristicStepsToGoal
@@ -242,10 +244,10 @@ class AIPlayer(Player):
       # value army size
       if me == self.me:
         myScore += min(len(myOffense), 3) * 10
-        enemyScore += max((min(len(enemyDrones), 5) * 5), min(len(enemyOffense), 3) * 10)
+        enemyScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 3) * 15)
       else:
         enemyScore += min(len(myOffense), 3) * 10
-        myScore += max((min(len(enemyDrones), 5) * 5), min(len(enemyOffense), 3) * 10)
+        myScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 3) * 15)
 
       # encourage more food gathering
       myScore -= 10 if (myFood < 1) else 0
@@ -273,52 +275,55 @@ class AIPlayer(Player):
       enemyScore += 21 - 7*(myHill.captureHealth)
 
       # Gather food
-      if me == self.me:
-        workers = myWorkers
-        tunnel = myTunnel
-        hill = myHill
-      else:
-        workers = enemyWorkers
-        tunnel = enemyTunnel
-        hill = enemyHill
-      score = 0
-      for w in workers:
-        if w.carrying: # if carrying go to hill/tunnel
-          score += 3
-          distanceToTunnel = stepsToReach(currentState, w.coords, tunnel.coords)
-          distanceToHill = stepsToReach(currentState, w.coords, hill.coords)
-          dist = min(distanceToHill, distanceToTunnel)
-          if dist > 3 and dist <= 6:
-            score += 1
-          if dist <= 3:
-            score += 2
-        else: # if not carrying go to food
-          dist = 100
-          for food in foods:
-            if stepsToReach(currentState, w.coords, food.coords) < dist:
-              dist = stepsToReach(currentState, w.coords, food.coords)
-          if dist > 3 and dist <= 6:
-            score += 1
-          if dist <= 3:
-            score += 2
-      if self.me == me:
-        myScore += score
-      else:
-        enemyScore += score
+#     if me == self.me:
+#       workers = myWorkers
+#       tunnel = myTunnel
+#       hill = myHill
+#     else:
+#       workers = enemyWorkers
+#       tunnel = enemyTunnel
+#       hill = enemyHill
+#     score = 0
+#     for w in workers:
+#       if w.carrying: # if carrying go to hill/tunnel
+#         score += 3
+#         distanceToTunnel = stepsToReach(currentState, w.coords, tunnel.coords)
+#         distanceToHill = stepsToReach(currentState, w.coords, hill.coords)
+#         dist = min(distanceToHill, distanceToTunnel)
+#         if dist > 2 and dist <= 4:
+#           score += 1
+#         if dist <= 2:
+#           score += 2
+#       else: # if not carrying go to food
+#         dist = 100
+#         for food in foods:
+#           if stepsToReach(currentState, w.coords, food.coords) < dist:
+#             dist = stepsToReach(currentState, w.coords, food.coords)
+#         if dist > 2 and dist <= 4:
+#           score += 1
+#         if dist <= 2:
+#           score += 2
+#     if self.me == me:
+#       myScore += score
+#     else:
+#       enemyScore += score
+      for w in myWorkers:
+        if w.carrying:
+          myScore += 4
       myScore += myFood * 7
 
-      if self.me == me:
-        workers = enemyWorkers
-      else:
-        workers = myWorkers
-      score = 0
-      for w in workers:
+#     if self.me == me:
+#       workers = enemyWorkers
+#     else:
+#       workers = myWorkers
+#     score = 0
+      for w in enemyWorkers:
         if w.carrying:
-          score += 4
-      if self.me == me:
-        enemyScore += score
-      else:
-        myScore += score
+          enemyScore += 4
+#     if self.me == me:
+#       enemyScore += score
+#     else:
+#       myScore += score
       enemyScore += enemyFood * 7
 
       score = min(myScore - enemyScore, 95) if (myScore - enemyScore > 0) else max(myScore - enemyScore, -95)
@@ -334,15 +339,27 @@ class AIPlayer(Player):
 #
 ##
 class Node:
-  def __init__(self, move, state, depth):
+  def __init__(self, move, state, depth, parent):
     self.move = move
     self.state = state
     self.depth = depth
     self.score = None
     self.turn = state.whoseTurn
-    self.alpha = int(-sys.maxsize)
-    self.beta = int(sys.maxsize)#alpha and beta values for minimax
+    self.alpha = -200
+    self.beta = 200#alpha and beta values for minimax
     self.children = []
+    self.parent = parent
 
   def addChild(self, node):
     self.children.append(node)
+
+  def removeChild(self, node):
+    self.children.remove(node)
+  
+  def updateBounds(self, node, me):
+    if self.turn == me:#max player
+      self.alpha = max(self.alpha, node.score)
+        
+    else:
+      self.beta = min(self.beta, node.score)
+    return True
