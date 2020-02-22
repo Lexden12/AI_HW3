@@ -95,6 +95,7 @@ class AIPlayer(Player):
           # For loops goes until set depth
           # in this case a depth of 3 
           self.total = 0
+          self.movesInTree = []
           self.expandNode(self.root)
           print(self.total)
         if not len(self.root.children) == 0:
@@ -106,8 +107,6 @@ class AIPlayer(Player):
             if child.score > maxScore:
               maxScore = child.score
               maxNode = child
-          print(maxNode.score)
-          print(maxNode.move)
           if maxNode.move.moveType == END or self.root.children == []:
             self.root = None
           else:
@@ -132,6 +131,8 @@ class AIPlayer(Player):
     # returns a list of nodes
     ##
     def expandNode(self, node):
+      if node.move is not None:
+        self.movesInTree.append(node.move)
       win = None
       if not self.test:
         win = getWinner(node.state)
@@ -155,7 +156,10 @@ class AIPlayer(Player):
         moves = listAllLegalMoves(node.state)
       else:
         moves = listMovesMock()
-      for move in moves:
+      for move in moves:#TODO: Figure out why repeat moves are not recognized
+        if move in self.movesInTree:
+          print("Skipping repeat")
+          continue
         if not self.test:
           nextState = getNextStateAdversarial(node.state, move)
         else:
@@ -258,10 +262,10 @@ class AIPlayer(Player):
 
       # value army size
       if me == self.me:
-        myScore += min(len(myOffense), 1) * 15
+#       myScore += min(len(myOffense), 1) * 15
         enemyScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 1) * 15)
       else:
-        enemyScore += min(len(myOffense), 1) * 15
+#       enemyScore += min(len(myOffense), 1) * 15
         myScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 1) * 15)
 
       # encourage more food gathering
@@ -270,30 +274,31 @@ class AIPlayer(Player):
 
       # never want 0 workers
       myScore -= 30 if (len(myWorkers) < 1) else 0
+      myScore += min(len(myWorkers), 2) * 10
       enemyScore -= 30 if (len(enemyWorkers) < 1) else 0
-
+      enemyScore += min(len(enemyWorkers), 2) * 10
       # calculation for soldier going
       # to kill enemyworker and after
       # going to sit on enemy anthill
-      dist = 100
-      score = 0
-      offense = myOffense
-      workers = enemyWorkers
-      hill = enemyHill
-      if not self.me == me:
-        offense = enemyOffense
-        workers = myWorkers
-        hill = myHill
-      for ant in offense:
-        if len(workers) == 0:
-          dist = stepsToReach(currentState, ant.coords, hill.coords)
-        else:
-          dist = stepsToReach(currentState, ant.coords, workers[0].coords)
-        score += 10 - min(dist, 10) // 2
-      if self.me == me:
-        myScore += 21 - 7*(hill.captureHealth) + score
-      else:
-        enemyScore += 21 - 7*(hill.captureHealth) + score
+#     dist = 100
+#     score = 0
+#     offense = myOffense
+#     workers = enemyWorkers
+#     hill = enemyHill
+#     if not self.me == me:
+#       offense = enemyOffense
+#       workers = myWorkers
+#       hill = myHill
+#     for ant in offense:
+#       if len(workers) == 0:
+#         dist = stepsToReach(currentState, ant.coords, hill.coords)
+#       else:
+#         dist = stepsToReach(currentState, ant.coords, workers[0].coords)
+#       score += 10 - min(dist, 10) // 2
+#     if self.me == me:
+#       myScore += 21 - 7*(hill.captureHealth) + score
+#     else:
+#       enemyScore += 21 - 7*(hill.captureHealth) + score
       dist = 100
       score = 0
       offense = enemyOffense
@@ -305,9 +310,9 @@ class AIPlayer(Player):
         dist = approxDist(ant.coords, hill.coords)
         score += 10 - min(dist, 10) // 2
       if self.me == me:
-        myScore += 21 - 7*(hill.captureHealth) + score
-      else:
         enemyScore += 21 - 7*(hill.captureHealth) + score
+      else:
+        myScore += 21 - 7*(hill.captureHealth) + score
 
       # Gather food
       if me == self.me:
