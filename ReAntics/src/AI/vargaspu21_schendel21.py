@@ -123,11 +123,15 @@ class AIPlayer(Player):
     ##
     # expandNode
     #
-    # takes in a node and expands it by
+    # takes in a node and recursively expands it by
     # taking all valid moves from that state
     # and creating new nodes for each new move
+    # Also implements alpha-beta pruning by using
+    # the MiniMax algorithm
+    # Further reduces node count by removing duplicate
+    # states. (n choose r, not n permute r)
     #
-    # returns a list of nodes
+    # returns nothing, just modifies builds out the tree from root
     ##
     def expandNode(self, node):
       win = None
@@ -153,7 +157,7 @@ class AIPlayer(Player):
         moves = listAllLegalMoves(node.state)
       else:
         moves = listMovesMock()
-      for move in moves:#TODO: Figure out why repeat moves are not recognized
+      for move in moves:
         duplicateCheckList = []
         duplicateCheckList.append(str(move))
         duplicateNode = node
@@ -225,7 +229,11 @@ class AIPlayer(Player):
 
     ##
     #heuristicStepsToGoal
-    #Description: Gets the number of moves to get to a winning state from the current state
+    #Description: Gets the expected value of a state
+    # Weighs the value of the amount of food and workers and offense
+    # each player has and estimates how good of a position each player is in
+    # This makes the Max player seek to have no army, but rather, make two
+    # workers and gather as much food as possible as quickly as possible.
     #
     #Parameters:
     #   currentState - A clone of the current state (GameState)
@@ -262,10 +270,8 @@ class AIPlayer(Player):
 
       # value army size
       if me == self.me:
-#       myScore += min(len(myOffense), 1) * 15
         enemyScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 1) * 15)
       else:
-#       enemyScore += min(len(myOffense), 1) * 15
         myScore += max((min(len(enemyDrones), 5) * 7), min(len(enemyOffense), 1) * 15)
 
       # encourage more food gathering
@@ -277,28 +283,6 @@ class AIPlayer(Player):
       myScore += min(len(myWorkers), 2) * 10
       enemyScore -= 30 if (len(enemyWorkers) < 1) else 0
       enemyScore += min(len(enemyWorkers), 2) * 10
-      # calculation for soldier going
-      # to kill enemyworker and after
-      # going to sit on enemy anthill
-#     dist = 100
-#     score = 0
-#     offense = myOffense
-#     workers = enemyWorkers
-#     hill = enemyHill
-#     if not self.me == me:
-#       offense = enemyOffense
-#       workers = myWorkers
-#       hill = myHill
-#     for ant in offense:
-#       if len(workers) == 0:
-#         dist = stepsToReach(currentState, ant.coords, hill.coords)
-#       else:
-#         dist = stepsToReach(currentState, ant.coords, workers[0].coords)
-#       score += 10 - min(dist, 10) // 2
-#     if self.me == me:
-#       myScore += 21 - 7*(hill.captureHealth) + score
-#     else:
-#       enemyScore += 21 - 7*(hill.captureHealth) + score
       dist = 100
       score = 0
       offense = enemyOffense
