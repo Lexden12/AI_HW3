@@ -57,7 +57,7 @@ class AIPlayer(Player):
     ##
     def getPlacement(self, currentState):
         if currentState.phase == SETUP_PHASE_1:
-            return [(3, 1), (7, 1), (0, 3), (1, 3), (2, 3), (3, 3), (5, 3), (6, 3), (7, 3), (8, 3), (9, 3)]
+            return [(3, 2), (7, 2), (0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (8, 0), (9, 0)]
         elif currentState.phase == SETUP_PHASE_2:  # stuff on foe's side
             numToPlace = 2
             moves = []
@@ -95,9 +95,8 @@ class AIPlayer(Player):
           # For loops goes until set depth
           # in this case a depth of 3 
           self.total = 0
-          self.movesInTree = []
+          self.movesInTree = {}
           self.expandNode(self.root)
-          print(self.total)
         if not len(self.root.children) == 0:
           maxNode = self.root.children[0]
           maxScore = self.root.children[0].score
@@ -131,8 +130,6 @@ class AIPlayer(Player):
     # returns a list of nodes
     ##
     def expandNode(self, node):
-      if node.move is not None:
-        self.movesInTree.append(node.move)
       win = None
       if not self.test:
         win = getWinner(node.state)
@@ -157,9 +154,16 @@ class AIPlayer(Player):
       else:
         moves = listMovesMock()
       for move in moves:#TODO: Figure out why repeat moves are not recognized
-        if move in self.movesInTree:
-          print("Skipping repeat")
+        duplicateCheckList = []
+        duplicateCheckList.append(str(move))
+        duplicateNode = node
+        while duplicateNode.parent is not None:
+          duplicateCheckList.append(str(duplicateNode.move))
+          duplicateNode = duplicateNode.parent
+        duplicateSet = frozenset(duplicateCheckList)
+        if hash(duplicateSet) in self.movesInTree:
           continue
+        self.movesInTree[hash(duplicateSet)] = duplicateSet
         if not self.test:
           nextState = getNextStateAdversarial(node.state, move)
         else:
@@ -195,10 +199,6 @@ class AIPlayer(Player):
         node.score = node.beta
       if node.parent is not None:
         node.parent.updateBounds(node, self.me)
-      if node.parent is None:
-        print("Root:")
-        print(node.score)
-        print(len(node.children))
 
     ##
     #getAttack
@@ -303,16 +303,18 @@ class AIPlayer(Player):
       score = 0
       offense = enemyOffense
       hill = myHill
+      queen = myQueen
       if not self.me == me:
         offense = myOffense
         hill = enemyHill
+        queen = enemyQueen
       for ant in offense:
         dist = approxDist(ant.coords, hill.coords)
         score += 10 - min(dist, 10) // 2
       if self.me == me:
-        enemyScore += 21 - 7*(hill.captureHealth) + score
+        enemyScore += 41 - 7*(hill.captureHealth) - 2*(queen.health) + score
       else:
-        myScore += 21 - 7*(hill.captureHealth) + score
+        myScore += 41 - 7*(hill.captureHealth) - 2*(queen.health) + score
 
       # Gather food
       if me == self.me:
